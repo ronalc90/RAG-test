@@ -1,0 +1,147 @@
+{
+  "timestamp": "2025-11-14T08:49:42.770811",
+  "total": 23,
+  "passed": 22,
+  "failed": 1,
+  "success_rate": 95.65217391304348,
+  "tests": [
+    {
+      "test": "RF1.1: Consulta simple",
+      "passed": "Los requisitos habilitantes son exigencias m\u00ednimas que deben cumplir los proponentes para participar en procedimientos de selecci\u00f3n, establecidos en normativas o en el pliego de condiciones. Miden la aptitud del proponente en aspectos como capacidad jur\u00eddica, financiera, organizacional y experiencia. Estos requisitos son analizados antes de la calificaci\u00f3n de ofertas y su incumplimiento resulta en el rechazo de la propuesta.",
+      "details": "Respuesta recibida: 428 caracteres",
+      "metric": null
+    },
+    {
+      "test": "RF1.2: Consulta con datos hist\u00f3ricos",
+      "passed": true,
+      "details": "Datos SECOP II incluidos: True",
+      "metric": null
+    },
+    {
+      "test": "RF2.1: Consulta de contratos",
+      "passed": true,
+      "details": "Contratos encontrados: 5",
+      "metric": null
+    },
+    {
+      "test": "RF2.2: Estad\u00edsticas por entidad",
+      "passed": true,
+      "details": "Total contratos: 1000",
+      "metric": null
+    },
+    {
+      "test": "RF2.3: B\u00fasqueda de proveedores",
+      "passed": true,
+      "details": "Proveedores encontrados: 20",
+      "metric": null
+    },
+    {
+      "test": "RF3.1: Similitud sem\u00e1ntica",
+      "passed": true,
+      "details": "Score de similitud: 0.657",
+      "metric": 0.656867543710714
+    },
+    {
+      "test": "RF4.1: Respuesta coherente",
+      "passed": true,
+      "details": "Longitud respuesta: 394 caracteres",
+      "metric": null
+    },
+    {
+      "test": "RF6.1: Documentos procesados",
+      "passed": true,
+      "details": "Docs: 2, Chunks: 197",
+      "metric": null
+    },
+    {
+      "test": "RF8: Health check",
+      "passed": true,
+      "details": "Status: 200",
+      "metric": null
+    },
+    {
+      "test": "RF8: Estado de BD",
+      "passed": true,
+      "details": "Status: 200",
+      "metric": null
+    },
+    {
+      "test": "RF8: Consulta principal",
+      "passed": true,
+      "details": "Status: 200",
+      "metric": null
+    },
+    {
+      "test": "RF8: Contratos SECOP II",
+      "passed": true,
+      "details": "Status: 200",
+      "metric": null
+    },
+    {
+      "test": "RF8: Estad\u00edsticas",
+      "passed": true,
+      "details": "Status: 200",
+      "metric": null
+    },
+    {
+      "test": "RF8: Proveedores",
+      "passed": true,
+      "details": "Status: 200",
+      "metric": null
+    },
+    {
+      "test": "RNF1.1: Tiempo de respuesta",
+      "passed": true,
+      "details": "Tiempo: 5.10s (l\u00edmite: 15s)",
+      "metric": 5.104511976242065
+    },
+    {
+      "test": "RNF1.2: Consulta simple r\u00e1pida",
+      "passed": true,
+      "details": "Tiempo: 0.004s (l\u00edmite: 5s)",
+      "metric": 0.0035247802734375
+    },
+    {
+      "test": "RNF3.1: Sistema disponible",
+      "passed": true,
+      "details": "Sistema: sqlite, LLM: openai",
+      "metric": null
+    },
+    {
+      "test": "RNF5.1: Precisi\u00f3n pregunta 1",
+      "passed": true,
+      "details": "Score: 0.70, Keywords: 4/4",
+      "metric": 0.7016665743662448
+    },
+    {
+      "test": "RNF5.2: Precisi\u00f3n pregunta 2",
+      "passed": true,
+      "details": "Score: 0.62, Keywords: 3/3",
+      "metric": 0.6214478969928959
+    },
+    {
+      "test": "RNF5.3: Precisi\u00f3n pregunta 3",
+      "passed": false,
+      "details": "Score: 0.54, Keywords: 1/4",
+      "metric": 0.535783885837917
+    },
+    {
+      "test": "RNF5: Precisi\u00f3n general",
+      "passed": true,
+      "details": "Precisi\u00f3n: 66.7% (objetivo: \u226566%)",
+      "metric": 66.66666666666666
+    },
+    {
+      "test": "RNF6.1: Interfaz web disponible",
+      "passed": true,
+      "details": "Interfaz web accesible",
+      "metric": null
+    },
+    {
+      "test": "RNF6.2: Respuestas en espa\u00f1ol",
+      "passed": true,
+      "details": "Respuesta en espa\u00f1ol: S\u00ed",
+      "metric": null
+    }
+  ]
+}

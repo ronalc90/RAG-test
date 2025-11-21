@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <title>SECOP Assistant — Frontend</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    :root{--bg:#0b1220;--fg:#e5e7eb;--mut:#9ca3af;--card:#0f172a;--edge:#1f2937;--btn:#10b981}
+    *{box-sizing:border-box}
+    html,body{background:var(--bg);color:var(--fg);margin:0;font-family:system-ui,Segoe UI,Roboto,Arial}
+    main{max-width:980px;margin:24px auto;padding:0 16px}
+    h1{font-size:22px;margin:0 0 10px}
+    section{border:1px solid var(--edge);background:var(--card);border-radius:12px;padding:14px;margin:12px 0}
+    label{display:block;font-size:12px;color:var(--mut);margin:8px 0 6px}
+    textarea,input{width:100%;padding:10px 12px;border-radius:10px;border:1px solid var(--edge);background:#0a1020;color:var(--fg)}
+    textarea{min-height:120px;resize:vertical;white-space:pre-wrap}
+    .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+    .row > div{min-width:120px}
+    button{background:var(--btn);color:#052e16;border:0;border-radius:10px;padding:10px 14px;font-weight:600;cursor:pointer}
+    button.secondary{background:#1f2937;color:#d1d5db}
+    .card{border:1px dashed var(--edge);border-radius:12px;padding:12px;margin:10px 0}
+    .card h4{margin:0 0 6px;font-size:15px}
+    a{color:#93c5fd;text-decoration:none}
+    .score{font-size:12px;color:#60a5fa;margin-left:6px}
+    small, .hint{color:var(--mut);font-size:12px}
+    .topbar{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+    .pill{font-size:12px;color:#93c5fd}
+  </style>
+</head>
+<body>
+<main>
+  <div class="topbar">
+    <h1>SECOP Assistant <span id="pill" class="pill"></span></h1>
+    <div class="hint" id="hint">—</div>
+  </div>
+
+  <section>
+    <label>Pregunta</label>
+    <textarea id="q" placeholder="¿Cuál es el plazo de ejecución del contrato?"></textarea>
+    <div class="row">
+      <div>
+        <label>top_k</label>
+        <input id="topk" value="3" />
+      </div>
+      <button id="btnAsk">Preguntar</button>
+      <button id="btnDemo" class="secondary">Cargar DEMO (URLs reales)</button>
+      <button id="btnZip" class="secondary">Descargar todos (ZIP)</button>
+    </div>
+  </section>
+
+  <section>
+    <label>Respuesta</label>
+    <textarea id="answer" readonly>—</textarea>
+  </section>
+
+  <section>
+    <label>Fuentes</label>
+    <div id="sources"></div>
+  </section>
+</main>
+
+<script>
+const $ = s => document.querySelector(s);
+let LAST_MATCHES = [];
+
+// -------------------- utilidades --------------------
+function call(path, opt={}) {
+  return fetch(path, { headers: { "Content-Type": "application/json" }, ...opt })
+    .then(async r => {
+      const t = await r.text();
+      let data; try { data = JSON.parse(t) } catch { data = t }
+      return { ok: r.ok, status: r.status, data };
+    });
+}
+async function ping(){
+  const r = await call("/ping");
+  $("#pill").textContent = r?.data?.db ? ("ok • " + (r.data.db || "")) : "ok";
+}
+ping();
+
+function normalize(s){
+  return (s||"")
+    .replace(/\\n/g, " ")           // elimina \n literales
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g,''); // quita tildes
+}
+function splitSentences(text){
+  const clean = normalize(text);
+  return clean.split(/(?<=[\\.!?;:])\\s+/).map(x=>x.trim()).filter(Boolean);
+}
+const STOP = new Set([
+  "el","la","los","las","de","del","y","o","u","en","un","una","uno","para","por",
+  "que","se","es","al","con","como","sobre","entre","desde","hasta","donde",
+  "este","esta","estos","estas","su","sus","lo","les","ya","más","mas",
+  "qué","cuál","cual","cuáles","cuales","cuándo","cuando","cuanto","cuántos","cuantos",
+  "si","no","hay","ser","estar","tener","hacer","a","e"
+]);
+function keywordsFromQuery(q){
+  return normalize(q).split(/\\s+/).filter(w=>w && !STOP.has(w) && w.length>2);
+}
+function sentenceScore(sentence, terms){
+  if(!sentence) return 0;
+  const tokens = new Set(sentence.split(/\\s+/));
+  let hits = 0;
+  for(const t of terms){ if(tokens.has(t)) hits++; }
+  const len = Math.max(10, sentence.length);
+  return hits>0 ? (hits * 10 + Math.min(30, 100/Math.abs(len-120))) : 0;
+}
+function dedupeByTokens(sentences){
+  const kept = [];
+  for(const s of sentences){
+    const a = new Set(s.split(/\\s+/));
+    let similar = false;
+    for(const k of kept){
+      const b = new Set(k.split(/\\s+/));
+      const inter = [...a].filter(x=>b.has(x)).length;
+      const jacc = inter / (a.size + b.size - inter);
+      if(jacc >= 0.70){ similar = true; break; }
+    }
+    if(!similar) kept.push(s);
+  }
+  return kept;
+}
+
+// -------------------- pintar fuentes --------------------
+function renderMatches(matches){
+  LAST_MATCHES = matches || [];
+  const box = $("#sources");
+  box.innerHTML = "";
+  $("#hint").textContent = "Al hacer clic en \"Descargar\", se entrega el PDF original si existe; si no, se genera uno reconstruido con TODO el texto.";
+
+  LAST_MATCHES.forEach((m,idx)=>{
+    const div = document.createElement("div");
+    div.className = "card";
+    const snippet = (m.text_preview || "").replace(/\\n/g, " ");
+    const href = `/download?doc_id=${m.doc_id}&q=${encodeURIComponent($("#q").value||"")}&a=${encodeURIComponent($("#answer").value||"")}`;
+    div.innerHTML = `
+      <h4>${idx+1}. ${m.titulo}<span class="score">score ${m.score.toFixed(5)}</span></h4>
+      <div>${snippet}</div>
+      <div style="margin-top:6px">
+        <a class="dl" href="${href}" target="_blank" rel="noopener noreferrer">Descargar</a>
+      </div>
+    `;
+    box.appendChild(div);
+  });
+}
+
+// -------------------- construcción de respuesta coherente (cliente) --------------------
+function buildAnswer(query, matches, maxBullets=5){
+  const terms = keywordsFromQuery(query);
+  if(matches.length === 0) return "—";
+
+  // candidatos = oraciones de los previews
+  let candidates = [];
+  for(const m of matches){
+    const txt = (m.text_preview || "").replace(/\\n/g, " ");
+    candidates = candidates.concat(splitSentences(txt));
+  }
+
+  const scored = candidates
+    .map(s => ({ s, score: sentenceScore(s, terms) }))
+    .filter(x => x.score > 0)
+    .sort((a,b) => b.score - a.score)
+    .map(x => x.s);
+
+  const unique = dedupeByTokens(scored).slice(0, maxBullets);
+
+  if(unique.length === 0){
+    const base = matches.map(m => (m.text_preview||"").replace(/\\n/g," ").trim());
+    return "– " + dedupeByTokens(base).slice(0, maxBullets).join("\\n– ");
+  }
+  return "– " + unique.join("\\n– ");
+}
+
+// -------------------- acciones --------------------
+async function ask(){
+  $("#answer").value = "pensando…";
+  $("#sources").innerHTML = "";
+  $("#btnAsk")?.setAttribute("disabled","true");
+
+  const payload = {
+    query: $("#q").value || "",
+    top_k: parseInt($("#topk").value||"3",10)
+  };
+  const r = await call("/ask", {method:"POST", body:JSON.stringify(payload)});
+
+  $("#btnAsk")?.removeAttribute("disabled");
+
+  if(!r.ok){
+    console.error(r);
+    $("#answer").value = "(error consultando /ask)";
+    return;
+  }
+
+  // si el backend ya trae answer coherente, úsala; si no, construimos una local
+  const matches = r.data?.matches || [];
+  const backendAnswer = (r.data?.answer || "").trim();
+  const answerText = backendAnswer ? backendAnswer : buildAnswer(payload.query, matches, 6);
+
+  $("#answer").value = answerText;
+  renderMatches(matches);
+}
+
+async function demo(){
+  const urls = [
+    ["Pliego de Condiciones Prueba","https://www.colombiacompra.gov.co/wp-content/uploads/2024/08/20151115_pliego_de_condiciones_para_contrato_de_obra_publica_v2_0.pdf"],
+    ["Manual requisitos habilitantes","https://www.colombiacompra.gov.co/wp-content/uploads/2024/08/Manual-para-determinar-y-verificar-los-requisitos-habilitantes-en-los-procesos-de-contratacion.pdf"]
+  ];
+  for (const [titulo,url] of urls){
+    const r = await call(`/ingest/url?url=${encodeURIComponent(url)}&titulo=${encodeURIComponent(titulo)}`, {method:"POST"});
+    if(!r.ok){ console.warn("No se pudo cargar:", url, r); }
+  }
+  alert("DEMO cargado. Ya puedes preguntar.");
+}
+
+function zipAll(){
+  const ids = LAST_MATCHES.map(m=>m.doc_id).join(",");
+  if(!ids){ alert("No hay resultados"); return; }
+  window.open("/download_zip?ids="+encodeURIComponent(ids), "_blank");
+}
+
+$("#btnAsk").onclick = ask;
+$("#btnDemo").onclick = demo;
+$("#btnZip").onclick = zipAll;
+</script>
+</body>
+</html>
