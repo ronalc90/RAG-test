@@ -647,9 +647,131 @@ EMBED_UI = r"""<!doctype html>
       </div>
     </div>
 
+    <!-- Sección: Proceso Interno RAG -->
+    <div class="card" style="margin-top:24px">
+      <h2>🔬 ¿Cómo funciona el Sistema RAG?</h2>
+      <p style="color:var(--text-muted); margin-bottom:20px">Proceso interno paso a paso para indexar y consultar contratos</p>
+
+      <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap:20px">
+
+        <!-- Paso 1: Ingesta -->
+        <div style="background:linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%); border-radius:12px; padding:20px; border-left:4px solid #0284c7">
+          <div style="display:flex; align-items:center; gap:12px; margin-bottom:12px">
+            <span style="background:#0284c7; color:white; width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:bold">1</span>
+            <h4 style="margin:0; color:#0284c7">Ingesta de Datos</h4>
+          </div>
+          <p style="font-size:13px; color:#334155; margin:0 0 12px 0">Se obtienen contratos desde la API de SECOP II (datos.gov.co)</p>
+          <div style="background:white; border-radius:8px; padding:12px; font-family:monospace; font-size:11px; color:#475569">
+            <div style="color:#059669">// Registro JSON original</div>
+            <div>{</div>
+            <div style="padding-left:12px">"nombre_entidad": "SENA",</div>
+            <div style="padding-left:12px">"valor_contrato": 50000000,</div>
+            <div style="padding-left:12px">"descripcion": "Software",</div>
+            <div style="padding-left:12px">... +40 campos más</div>
+            <div>}</div>
+          </div>
+        </div>
+
+        <!-- Paso 2: Código Único -->
+        <div style="background:linear-gradient(135deg, #fefce8 0%, #fef9c3 100%); border-radius:12px; padding:20px; border-left:4px solid #ca8a04">
+          <div style="display:flex; align-items:center; gap:12px; margin-bottom:12px">
+            <span style="background:#ca8a04; color:white; width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:bold">2</span>
+            <h4 style="margin:0; color:#ca8a04">Generar Código Único</h4>
+          </div>
+          <p style="font-size:13px; color:#334155; margin:0 0 12px 0">Si el registro no tiene ID, se genera uno automáticamente</p>
+          <div style="background:white; border-radius:8px; padding:12px; font-family:monospace; font-size:11px; color:#475569">
+            <div style="color:#059669">// Buscar ID existente</div>
+            <div>campos = ["numero_proceso",</div>
+            <div style="padding-left:12px">"codigo_secop"]</div>
+            <div style="margin-top:8px; color:#dc2626">// Si no existe:</div>
+            <div style="color:#2563eb; font-weight:bold">codigo = "SEC-000001"</div>
+          </div>
+        </div>
+
+        <!-- Paso 3: Separar Textos -->
+        <div style="background:linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%); border-radius:12px; padding:20px; border-left:4px solid #16a34a">
+          <div style="display:flex; align-items:center; gap:12px; margin-bottom:12px">
+            <span style="background:#16a34a; color:white; width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:bold">3</span>
+            <h4 style="margin:0; color:#16a34a">Separar Textos</h4>
+          </div>
+          <p style="font-size:13px; color:#334155; margin:0 0 12px 0">Se divide en texto completo y texto para búsqueda</p>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px">
+            <div style="background:white; border-radius:8px; padding:10px; font-size:10px">
+              <div style="color:#dc2626; font-weight:bold; margin-bottom:4px">TEXTO TOTAL</div>
+              <div style="color:#64748b">JSON completo<br>(50+ campos)</div>
+            </div>
+            <div style="background:white; border-radius:8px; padding:10px; font-size:10px">
+              <div style="color:#16a34a; font-weight:bold; margin-bottom:4px">TEXTO INDEXAR</div>
+              <div style="color:#64748b">Solo 4 campos:<br>Depto, Desc,<br>Objeto, Entidad</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Paso 4: Embeddings -->
+        <div style="background:linear-gradient(135deg, #fdf4ff 0%, #fae8ff 100%); border-radius:12px; padding:20px; border-left:4px solid #a855f7">
+          <div style="display:flex; align-items:center; gap:12px; margin-bottom:12px">
+            <span style="background:#a855f7; color:white; width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:bold">4</span>
+            <h4 style="margin:0; color:#a855f7">Generar Embeddings</h4>
+          </div>
+          <p style="font-size:13px; color:#334155; margin:0 0 12px 0">El texto a indexar se convierte en vectores numéricos</p>
+          <div style="background:white; border-radius:8px; padding:12px; font-family:monospace; font-size:11px; color:#475569">
+            <div style="color:#059669">// Texto → Vector</div>
+            <div>"Software SENA"</div>
+            <div style="margin-top:4px">↓</div>
+            <div style="color:#a855f7">[0.23, -0.45, 0.78,</div>
+            <div style="color:#a855f7; padding-left:8px">0.12, ... 1536 dims]</div>
+          </div>
+        </div>
+
+        <!-- Paso 5: Almacenar -->
+        <div style="background:linear-gradient(135deg, #fff1f2 0%, #ffe4e6 100%); border-radius:12px; padding:20px; border-left:4px solid #e11d48">
+          <div style="display:flex; align-items:center; gap:12px; margin-bottom:12px">
+            <span style="background:#e11d48; color:white; width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:bold">5</span>
+            <h4 style="margin:0; color:#e11d48">Almacenar en BD</h4>
+          </div>
+          <p style="font-size:13px; color:#334155; margin:0 0 12px 0">Todo se guarda vinculado por el código único</p>
+          <div style="background:white; border-radius:8px; padding:10px; font-size:10px">
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px">
+              <div style="background:#fee2e2; padding:6px; border-radius:4px; text-align:center">
+                <div style="font-weight:bold; color:#e11d48">contratos</div>
+                <div style="color:#64748b">codigo + textos</div>
+              </div>
+              <div style="background:#fee2e2; padding:6px; border-radius:4px; text-align:center">
+                <div style="font-weight:bold; color:#e11d48">embeddings</div>
+                <div style="color:#64748b">codigo + vector</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Paso 6: Consulta RAG -->
+        <div style="background:linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%); border-radius:12px; padding:20px; border-left:4px solid #2563eb">
+          <div style="display:flex; align-items:center; gap:12px; margin-bottom:12px">
+            <span style="background:#2563eb; color:white; width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:bold">6</span>
+            <h4 style="margin:0; color:#2563eb">Consulta RAG</h4>
+          </div>
+          <p style="font-size:13px; color:#334155; margin:0 0 12px 0">Usuario pregunta → Busca vector similar → Recupera JSON completo</p>
+          <div style="background:white; border-radius:8px; padding:10px; font-size:10px; text-align:center">
+            <div style="color:#2563eb; font-weight:bold">"Contratos de software"</div>
+            <div>↓ embedding ↓</div>
+            <div style="color:#a855f7">[0.21, -0.43, ...]</div>
+            <div>↓ similitud ↓</div>
+            <div style="color:#16a34a; font-weight:bold">Match: SEC-000001</div>
+            <div>↓</div>
+            <div style="color:#e11d48; font-weight:bold">JSON Completo</div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
     <div class="footer">
       <p>🤖 Powered by GPT-4o-mini | 🔗 SECOP II Data | 📚 Colombia Compra Eficiente</p>
-      <p style="margin-top:8px; opacity:0.7">Documentación: <a href="/database" style="color:white">Ver Base de Datos</a></p>
+      <p style="margin-top:8px; opacity:0.7">
+        <a href="/database" style="color:white">📊 Ver Base de Datos</a>
+        <span style="margin:0 12px">|</span>
+        <a href="/docs" style="color:white">📖 API Docs</a>
+      </p>
     </div>
   </div>
 
