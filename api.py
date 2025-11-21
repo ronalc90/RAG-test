@@ -64,6 +64,10 @@ except Exception:
 from src.chunking import split_text
 from src.embeddings import embed_texts, embed_text
 from src.secop_api import buscar_contratos, obtener_estadisticas_entidad, buscar_proveedores_por_sector
+from src.db_sqlite import (
+    insert_contrato, get_contrato_by_codigo, list_contratos, count_contratos,
+    insert_contrato_embeddings, fetch_all_contrato_embeddings
+)
 from pypdf import PdfReader
 from pydantic import BaseModel
 
@@ -536,6 +540,7 @@ EMBED_UI = r"""<!doctype html>
         <div class="tabs">
           <button class="tab active" data-tab="ask">Preguntar</button>
           <button class="tab" data-tab="contracts">Contratos SECOP II</button>
+          <button class="tab" data-tab="rag">Base RAG</button>
           <button class="tab" data-tab="stats">Estadísticas</button>
           <button class="tab" data-tab="tests">Pruebas</button>
         </div>
@@ -582,6 +587,38 @@ EMBED_UI = r"""<!doctype html>
           <button onclick="searchContracts()">🔎 Buscar Contratos</button>
 
           <div id="contractsResult"></div>
+        </div>
+
+        <!-- Tab: Base RAG -->
+        <div class="tab-content" id="rag-content">
+          <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:12px; margin-bottom:20px">
+            <div class="stat-box" id="ragStatContratos" style="text-align:center; padding:16px">
+              <h3 style="margin:0; font-size:28px">-</h3>
+              <p style="margin:4px 0 0 0; font-size:12px">Contratos</p>
+            </div>
+            <div class="stat-box" id="ragStatEmb" style="text-align:center; padding:16px">
+              <h3 style="margin:0; font-size:28px">-</h3>
+              <p style="margin:4px 0 0 0; font-size:12px">Con Embeddings</p>
+            </div>
+            <div class="stat-box" id="ragStatTotal" style="text-align:center; padding:16px">
+              <h3 style="margin:0; font-size:28px">-</h3>
+              <p style="margin:4px 0 0 0; font-size:12px">Total Embeddings</p>
+            </div>
+          </div>
+
+          <div style="background:#f8fafc; padding:16px; border-radius:8px; margin-bottom:20px">
+            <h4 style="margin:0 0 12px 0">Cargar Contratos desde SECOP II</h4>
+            <div style="display:grid; grid-template-columns: 1fr 1fr 100px; gap:12px">
+              <input type="text" id="ragEntidad" placeholder="Entidad (opcional)">
+              <input type="text" id="ragObjeto" placeholder="Objeto (opcional)">
+              <input type="number" id="ragLimite" value="100" min="1" max="1000" style="width:100%">
+            </div>
+            <button onclick="cargarContratosRAG()" style="margin-top:12px">📥 Cargar Contratos</button>
+            <span id="ragCargaStatus" style="margin-left:12px; color:var(--text-muted)"></span>
+          </div>
+
+          <h4 style="margin-bottom:12px">Contratos en Base de Datos</h4>
+          <div id="ragContratosList" style="max-height:400px; overflow-y:auto"></div>
         </div>
 
         <!-- Tab: Estadísticas -->
@@ -910,6 +947,92 @@ EMBED_UI = r"""<!doctype html>
       if (e.key === 'Enter' && e.ctrlKey) {
         ask();
       }
+    });
+
+    // ========== Funciones RAG ==========
+    async function loadRAGStats() {
+      const r = await call('/rag/stats');
+      if (r.ok && r.data.ok) {
+        $('#ragStatContratos h3').textContent = r.data.total_contratos;
+        $('#ragStatEmb h3').textContent = r.data.contratos_con_embeddings;
+        $('#ragStatTotal h3').textContent = r.data.total_embeddings;
+      }
+    }
+
+    async function loadRAGContratos() {
+      const list = $('#ragContratosList');
+      list.innerHTML = '<p>Cargando...</p>';
+
+      const r = await call('/rag/contratos?limit=50');
+      if (!r.ok || !r.data.ok) {
+        list.innerHTML = '<p style="color:red">Error al cargar contratos</p>';
+        return;
+      }
+
+      if (r.data.contratos.length === 0) {
+        list.innerHTML = '<p style="color:var(--text-muted)">No hay contratos cargados. Use el formulario para cargar desde SECOP II.</p>';
+        return;
+      }
+
+      let html = '';
+      r.data.contratos.forEach(c => {
+        const textoPreview = (c.texto_indexar || '').substring(0, 150);
+        html += `
+          <div class="result-card" style="margin-bottom:8px; cursor:pointer" onclick="verContratoRAG('${c.codigo_unico}')">
+            <div style="display:flex; justify-content:space-between; align-items:center">
+              <strong style="color:var(--primary)">${c.codigo_unico}</strong>
+              <span style="font-size:11px; color:var(--text-muted)">${c.created_at || ''}</span>
+            </div>
+            <p style="margin-top:6px; font-size:13px">${textoPreview}...</p>
+          </div>
+        `;
+      });
+
+      list.innerHTML = html;
+    }
+
+    async function cargarContratosRAG() {
+      const status = $('#ragCargaStatus');
+      status.textContent = 'Cargando...';
+
+      const entidad = $('#ragEntidad').value;
+      const objeto = $('#ragObjeto').value;
+      const limite = $('#ragLimite').value || 100;
+
+      const params = new URLSearchParams();
+      if (entidad) params.append('entidad', entidad);
+      if (objeto) params.append('objeto', objeto);
+      params.append('limite', limite);
+
+      const r = await call(`/rag/cargar?${params}`, {method: 'POST'});
+
+      if (r.ok && r.data.ok) {
+        status.textContent = `Cargados ${r.data.cargados} contratos. Total: ${r.data.total_en_bd}`;
+        status.style.color = 'var(--success)';
+        loadRAGStats();
+        loadRAGContratos();
+      } else {
+        status.textContent = r.data.error || 'Error al cargar';
+        status.style.color = 'var(--danger)';
+      }
+    }
+
+    async function verContratoRAG(codigo) {
+      const r = await call(`/rag/contratos/${encodeURIComponent(codigo)}`);
+      if (r.ok && r.data.ok) {
+        const c = r.data.contrato;
+        alert(`Código: ${c.codigo_unico}\n\nTexto a Indexar:\n${c.texto_indexar}\n\nJSON completo guardado en texto_total`);
+      }
+    }
+
+    // Cargar datos RAG al hacer clic en la pestaña
+    $$('.tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        if (tab.dataset.tab === 'rag') {
+          loadRAGStats();
+          loadRAGContratos();
+        }
+      });
     });
   </script>
 </body>
@@ -1393,6 +1516,82 @@ def proveedores_por_sector(sector: str = Query(..., description="Sector o palabr
         "sector": sector,
         "total_proveedores": len(proveedores),
         "proveedores": proveedores[:20]  # Limitar a top 20
+    }
+
+
+# =========================
+# Endpoints Contratos RAG
+# =========================
+@app.get("/rag/contratos")
+def listar_contratos_rag(
+    limit: int = Query(50, le=500),
+    offset: int = Query(0)
+):
+    """Lista contratos cargados en el sistema RAG"""
+    contratos = list_contratos(limit=limit, offset=offset)
+    total = count_contratos()
+    return {
+        "ok": True,
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+        "contratos": contratos
+    }
+
+
+@app.get("/rag/contratos/{codigo_unico}")
+def obtener_contrato_rag(codigo_unico: str):
+    """Obtiene un contrato por su código único"""
+    contrato = get_contrato_by_codigo(codigo_unico)
+    if not contrato:
+        raise HTTPException(status_code=404, detail="Contrato no encontrado")
+    return {"ok": True, "contrato": contrato}
+
+
+@app.post("/rag/cargar")
+def cargar_contratos_rag(
+    entidad: Optional[str] = Query(None),
+    objeto: Optional[str] = Query(None),
+    limite: int = Query(100, le=1000)
+):
+    """Carga contratos desde SECOP II al sistema RAG"""
+    contratos = buscar_contratos(
+        entidad=entidad,
+        objeto_contratar=objeto,
+        limite=limite
+    )
+
+    if not contratos:
+        return {"ok": False, "error": "No se encontraron contratos", "cargados": 0}
+
+    cargados = 0
+    for i, contrato in enumerate(contratos, 1):
+        try:
+            insert_contrato(contrato, i)
+            cargados += 1
+        except Exception:
+            pass
+
+    return {
+        "ok": True,
+        "encontrados": len(contratos),
+        "cargados": cargados,
+        "total_en_bd": count_contratos()
+    }
+
+
+@app.get("/rag/stats")
+def estadisticas_rag():
+    """Estadísticas del sistema RAG"""
+    total_contratos = count_contratos()
+    embeddings = fetch_all_contrato_embeddings()
+    codigos_con_emb = len(set(e[0] for e in embeddings))
+
+    return {
+        "ok": True,
+        "total_contratos": total_contratos,
+        "contratos_con_embeddings": codigos_con_emb,
+        "total_embeddings": len(embeddings)
     }
 
 
